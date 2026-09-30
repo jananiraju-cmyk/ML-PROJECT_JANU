@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 
 # --------------------------------------
@@ -17,14 +18,65 @@ EXPRESSIONS = [
 
 
 # --------------------------------------
-# 2. Model files
+# 2. Japanese expression labels
+# --------------------------------------
+JAPANESE_EXPRESSIONS = {
+    "ANGRY": "怒り",
+    "DISGUST": "嫌悪",
+    "FEARFUL": "恐怖",
+    "HAPPY": "嬉しい",
+    "NEUTRAL": "普通",
+    "SAD": "悲しい",
+    "SURPRISED": "驚き"
+}
+
+
+# --------------------------------------
+# 3. Ask user's name
+# --------------------------------------
+person_name = input("Enter your name: ").strip()
+
+if not person_name:
+    person_name = "User"
+
+
+# --------------------------------------
+# 4. Model files
 # --------------------------------------
 FACE_MODEL = "face_detection_yunet_2023mar.onnx"
 EMOTION_MODEL = "facial_expression_recognition.onnx"
 
 
 # --------------------------------------
-# 3. Standard face landmark positions
+# 5. Japanese font
+# --------------------------------------
+FONT_PATH = "C:/Windows/Fonts/meiryo.ttc"
+
+japanese_font = ImageFont.truetype(
+    FONT_PATH,
+    26
+)
+
+
+# --------------------------------------
+# 6. Stylish text colors
+# Pillow uses RGB
+# --------------------------------------
+TEXT_COLOR = (128, 0, 0)         # Maroon
+OUTLINE_COLOR = (255, 255, 255)  # White
+BOX_COLOR = (255, 240, 245)      # Light pink
+
+
+# --------------------------------------
+# 7. Face rectangle color
+# OpenCV uses BGR
+# --------------------------------------
+FACE_BOX_COLOR = (80, 0, 128)    # Maroon-ish
+LANDMARK_COLOR = (255, 180, 0)
+
+
+# --------------------------------------
+# 8. Standard face landmark positions
 # --------------------------------------
 STANDARD_POINTS = np.array(
     [
@@ -39,7 +91,7 @@ STANDARD_POINTS = np.array(
 
 
 # --------------------------------------
-# 4. Create face detector
+# 9. Create face detector
 # --------------------------------------
 face_detector = cv2.FaceDetectorYN_create(
     FACE_MODEL,
@@ -52,7 +104,7 @@ face_detector = cv2.FaceDetectorYN_create(
 
 
 # --------------------------------------
-# 5. Load expression model
+# 10. Load expression model
 # --------------------------------------
 emotion_net = cv2.dnn.readNetFromONNX(
     EMOTION_MODEL
@@ -68,11 +120,13 @@ emotion_net.setPreferableTarget(
 
 
 # --------------------------------------
-# 6. Align face using 5 landmarks
+# 11. Align face using 5 landmarks
 # --------------------------------------
 def align_face(frame, landmarks):
 
-    landmarks = landmarks.astype(np.float32)
+    landmarks = landmarks.astype(
+        np.float32
+    )
 
     transform, _ = cv2.estimateAffinePartial2D(
         landmarks,
@@ -93,7 +147,7 @@ def align_face(frame, landmarks):
 
 
 # --------------------------------------
-# 7. Classify facial expression
+# 12. Classify facial expression
 # --------------------------------------
 def classify_expression(face):
 
@@ -136,13 +190,90 @@ def classify_expression(face):
         np.argmax(output)
     )
 
-    return EXPRESSIONS[expression_id]
+    return EXPRESSIONS[
+        expression_id
+    ]
 
 
 # --------------------------------------
-# 8. Start webcam
+# 13. Draw stylish maroon text
 # --------------------------------------
-camera = cv2.VideoCapture(0)
+def draw_stylish_text(
+    pil_image,
+    text,
+    position,
+    font
+):
+
+    draw = ImageDraw.Draw(
+        pil_image
+    )
+
+    x, y = position
+
+    # Calculate text size
+    bbox = draw.textbbox(
+        (x, y),
+        text,
+        font=font
+    )
+
+    left, top, right, bottom = bbox
+
+    padding_x = 12
+    padding_y = 7
+
+    # ----------------------------------
+    # Shadow
+    # ----------------------------------
+    shadow_offset = 4
+
+    draw.rectangle(
+        [
+            left - padding_x + shadow_offset,
+            top - padding_y + shadow_offset,
+            right + padding_x + shadow_offset,
+            bottom + padding_y + shadow_offset
+        ],
+        fill=(80, 80, 80)
+    )
+
+
+    # ----------------------------------
+    # Background box
+    # ----------------------------------
+    draw.rectangle(
+        [
+            left - padding_x,
+            top - padding_y,
+            right + padding_x,
+            bottom + padding_y
+        ],
+        fill=BOX_COLOR
+    )
+
+
+    # ----------------------------------
+    # White outline
+    # ----------------------------------
+    draw.text(
+        (x, y),
+        text,
+        font=font,
+        fill=TEXT_COLOR,
+        stroke_width=2,
+        stroke_fill=OUTLINE_COLOR
+    )
+
+    return pil_image
+
+
+# --------------------------------------
+# 14. Start webcam
+# --------------------------------------
+camera = cv2.VideoCapture(
+    0
+)
 
 camera.set(
     cv2.CAP_PROP_FRAME_WIDTH,
@@ -164,17 +295,21 @@ if not camera.isOpened():
     exit()
 
 
+print()
 print(
     "Facial Expression Recognition Started"
 )
-
+print(
+    f"Hello {person_name}!"
+)
 print(
     "Press Q to quit"
 )
+print()
 
 
 # --------------------------------------
-# 9. Main real-time loop
+# 15. Main real-time loop
 # --------------------------------------
 while True:
 
@@ -189,7 +324,9 @@ while True:
         break
 
 
+    # ----------------------------------
     # Mirror webcam
+    # ----------------------------------
     frame = cv2.flip(
         frame,
         1
@@ -197,7 +334,7 @@ while True:
 
 
     # ----------------------------------
-    # 10. Tell YuNet current frame size
+    # Tell YuNet current frame size
     # ----------------------------------
     height, width = frame.shape[:2]
 
@@ -207,7 +344,7 @@ while True:
 
 
     # ----------------------------------
-    # 11. Detect faces
+    # Detect faces
     # ----------------------------------
     _, faces = face_detector.detect(
         frame
@@ -215,13 +352,15 @@ while True:
 
 
     # ----------------------------------
-    # 12. Process detected faces
+    # Process detected faces
     # ----------------------------------
     if faces is not None:
 
         for face in faces:
 
+            # --------------------------
             # Face rectangle
+            # --------------------------
             x = int(face[0])
             y = int(face[1])
 
@@ -229,9 +368,9 @@ while True:
             h = int(face[3])
 
 
-            # ----------------------------------
-            # 13. Get five facial landmarks
-            # ----------------------------------
+            # --------------------------
+            # Get five facial landmarks
+            # --------------------------
             landmarks = face[
                 4:14
             ].reshape(
@@ -240,9 +379,9 @@ while True:
             )
 
 
-            # ----------------------------------
-            # 14. Align face
-            # ----------------------------------
+            # --------------------------
+            # Align face
+            # --------------------------
             aligned_face = align_face(
                 frame,
                 landmarks
@@ -252,62 +391,122 @@ while True:
                 continue
 
 
-            # ----------------------------------
-            # 15. Predict expression
-            # ----------------------------------
+            # --------------------------
+            # Predict expression
+            # --------------------------
             expression = classify_expression(
                 aligned_face
             )
 
 
-            # ----------------------------------
-            # 16. Draw face rectangle
-            # ----------------------------------
+            # --------------------------
+            # Japanese expression
+            # --------------------------
+            japanese_expression = (
+                JAPANESE_EXPRESSIONS[
+                    expression
+                ]
+            )
+
+
+            # --------------------------
+            # Final sentence
+            # Example:
+            # Jaani, you are happy / 嬉しい
+            # --------------------------
+            display_text = (
+                f"{person_name}, "
+                f"you are "
+                f"{expression.lower()} / "
+                f"{japanese_expression}"
+            )
+
+
+            # --------------------------
+            # Draw face rectangle
+            # --------------------------
             cv2.rectangle(
                 frame,
                 (x, y),
-                (x + w, y + h),
-                (0, 255, 0),
-                2
-            )
-
-
-            # ----------------------------------
-            # 17. Draw expression text
-            # ----------------------------------
-            cv2.putText(
-                frame,
-                expression,
                 (
-                    x,
-                    max(y - 10, 25)
+                    x + w,
+                    y + h
                 ),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 255, 0),
-                2
+                FACE_BOX_COLOR,
+                3
             )
 
 
-            # ----------------------------------
-            # 18. Draw landmarks
-            # ----------------------------------
+            # --------------------------
+            # Draw landmarks
+            # --------------------------
             for point in landmarks:
 
-                px = int(point[0])
-                py = int(point[1])
+                px = int(
+                    point[0]
+                )
+
+                py = int(
+                    point[1]
+                )
 
                 cv2.circle(
                     frame,
                     (px, py),
                     3,
-                    (255, 0, 0),
+                    LANDMARK_COLOR,
                     -1
                 )
 
 
+            # --------------------------
+            # Convert OpenCV -> Pillow
+            # --------------------------
+            frame_pil = Image.fromarray(
+                cv2.cvtColor(
+                    frame,
+                    cv2.COLOR_BGR2RGB
+                )
+            )
+
+
+            # --------------------------
+            # Position text
+            # --------------------------
+            text_y = y - 45
+
+            if text_y < 10:
+
+                text_y = y + h + 10
+
+
+            # --------------------------
+            # Draw stylish text
+            # --------------------------
+            frame_pil = draw_stylish_text(
+                frame_pil,
+                display_text,
+                (
+                    max(x, 10),
+                    text_y
+                ),
+                japanese_font
+            )
+
+
+            # --------------------------
+            # Convert Pillow -> OpenCV
+            # --------------------------
+            frame = cv2.cvtColor(
+                np.array(
+                    frame_pil
+                ),
+                cv2.COLOR_RGB2BGR
+            )
+
+
     # --------------------------------------
-    # 19. Show result
+    # 16. Show result
     # --------------------------------------
     cv2.imshow(
         "Real-Time Facial Expression Recognition",
@@ -316,15 +515,18 @@ while True:
 
 
     # --------------------------------------
-    # 20. Press Q to quit
+    # 17. Press Q to quit
     # --------------------------------------
-    if cv2.waitKey(1) & 0xFF == ord("q"):
+    if (
+        cv2.waitKey(1) & 0xFF
+        == ord("q")
+    ):
 
         break
 
 
 # --------------------------------------
-# 21. Cleanup
+# 18. Cleanup
 # --------------------------------------
 camera.release()
 
